@@ -29,6 +29,8 @@ const theme = createTheme({
   },
 });
 
+document.title = 'プラン生成地図AI'; // タイトルを変更
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>

@@ -18,10 +18,14 @@ const InputForm = ({ onPlanSubmit }) => {
 
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
-      <Typography variant="h6" gutterBottom>
+      <Typography variant="h6" gutterBottom sx={{ 
+        fontFamily: "'Segoe UI', 'Comic Sans MS', cursive",
+        fontWeight: 'bold',
+        color: '#1976d2',
+        letterSpacing: '0.1em'
+      }}>
         プラン作成
       </Typography>
-      
       <TextField
         fullWidth
         label="目的"
