@@ -1,5 +1,8 @@
 // server.js
 const express = require('express');
+
+const path = require('path');
+
 const { Client } = require('pg');
 const cors = require('cors');
 const { spawn } = require('child_process');
@@ -8,8 +11,16 @@ require('dotenv').config({ path: '.env.local' });
 const app = express();
 const port = process.env.PORT || 5000;
 
+
+// 静的ファイルを提供するディレクトリを指定
+const staticDir = path.join(__dirname, 'build');
+
 app.use(cors()); // CORSを許可
 app.use(express.json()); // JSONリクエストを解析
+
+// express.static ミドルウェアを設定
+app.use(express.static(staticDir));
+
 
 const client = new Client({
   connectionString: process.env.DATABASE_URL,
@@ -49,6 +60,11 @@ async function startBackend() {
     process.exit(1);
   }
 }
+
+// ルートへのリクエストに対してindex.htmlを返す
+app.get('*', (req, res) => {
+  res.sendFile(path.join(staticDir, 'index.html'));
+});
 
 app.get('/api/plans', async (req, res) => {
  try {
