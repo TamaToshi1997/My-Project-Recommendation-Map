@@ -24,16 +24,28 @@ const App = () => {
   const fetchSavedPlans = async () => {
     console.log('Fetching saved plans...');
     try {
-      const response = await fetch('http://localhost:5000/api/plans');
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/plans`, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
       console.log('Fetch response:', response);
       
-      if (response.ok) {
-        const plans = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const text = await response.text();
+      console.log('Response text:', text);
+      
+      try {
+        const plans = JSON.parse(text);
         console.log('Fetched plans:', plans);
         setSavedPlans(plans);
-      } else {
-        console.error('Failed to fetch plans:', response.status, response.statusText);
-        setError('保存済みプランの取得に失敗しました');
+      } catch (parseError) {
+        console.error('Failed to parse plans:', parseError);
+        setError('保存済みプランの解析に失敗しました');
       }
     } catch (error) {
       console.error('Error fetching saved plans:', error);
@@ -137,7 +149,7 @@ const App = () => {
   const handleDeletePlan = async (id, event) => {
     event.stopPropagation(); // リストアイテムのクリックイベントを停止
     try {
-      const response = await fetch(`http://localhost:5000/api/plans/${id}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/plans/${id}`, {
         method: 'DELETE',
       });
       
