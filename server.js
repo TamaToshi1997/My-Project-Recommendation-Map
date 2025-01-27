@@ -15,7 +15,13 @@ const port = process.env.PORT || 5000;
 // 静的ファイルを提供するディレクトリを指定
 const staticDir = path.join(__dirname, 'build');
 
-app.use(cors()); // CORSを許可
+// CORSの設定をより具体的に行う
+app.use(cors({
+  origin: 'http://localhost:3000',
+  methods: ['GET', 'POST', 'DELETE'],
+  credentials: true
+}));
+
 app.use(express.json()); // JSONリクエストを解析
 
 // express.static ミドルウェアを設定
@@ -61,22 +67,20 @@ async function startBackend() {
   }
 }
 
-// ルートへのリクエストに対してindex.htmlを返す
-app.get('*', (req, res) => {
-  res.sendFile(path.join(staticDir, 'index.html'));
-});
-
+// APIエンドポイントを先に定義
 app.get('/api/plans', async (req, res) => {
  try {
+      console.log('GET /api/plans - リクエスト受信');
       const query = 'SELECT * FROM plans';
+      console.log('クエリ実行:', query);
       const result = await client.query(query);
+      console.log('クエリ結果:', result.rows);
       res.json(result.rows);
   } catch (error) {
      console.error("Error loading plans:", error);
      res.status(500).json({ error: 'Failed to fetch plans' });
   }
 });
-
 
 app.post('/api/plans', async (req, res) => {
 const { purpose, range, planText, locations, route } = req.body;
@@ -107,6 +111,11 @@ app.delete('/api/plans/:id', async (req, res) => {
     console.error('Error deleting plan:', error);
     res.status(500).send({ error: 'Failed to delete plan' });
   }
+});
+
+// ワイルドカードルートは最後に定義
+app.get('*', (req, res) => {
+  res.sendFile(path.join(staticDir, 'index.html'));
 });
 
 startBackend();
