@@ -1,14 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { Loader } from '@googlemaps/js-api-loader';
 
-const MapDisplay = ({ route, locationText, onLocationUpdate }) => {
+const MapDisplay = ({ plan }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const directionsServiceRef = useRef(null);
   const directionsRendererRef = useRef(null);
   const googleRef = useRef(null);
   const infoWindowRef = useRef(null);
-  const markersRef = useRef([]); // マーカーを追跡するための配列
+  const markersRef = useRef([]);
 
   // マップの初期化
   useEffect(() => {
@@ -28,7 +28,6 @@ const MapDisplay = ({ route, locationText, onLocationUpdate }) => {
         const google = await loader.load();
         googleRef.current = google;
 
-        // 必要なライブラリを個別に読み込む
         await google.maps.importLibrary("places");
         await google.maps.importLibrary("marker");
 
@@ -36,7 +35,7 @@ const MapDisplay = ({ route, locationText, onLocationUpdate }) => {
         
         if (!mapInstanceRef.current) {
           mapInstanceRef.current = new google.maps.Map(mapRef.current, {
-            center: route?.center || initialCenter,
+            center: initialCenter,
             zoom: 12,
             mapId: process.env.REACT_APP_GOOGLE_MAPS_ID
           });
@@ -46,33 +45,32 @@ const MapDisplay = ({ route, locationText, onLocationUpdate }) => {
             map: mapInstanceRef.current,
             suppressMarkers: true
           });
-        } else {
-          mapInstanceRef.current.setCenter(route?.center || initialCenter);
         }
       } catch (error) {
         console.error('Map initialization error:', error);
-        console.error('Environment variables:', process.env);
       }
     };
 
     initializeMap();
   }, []);
 
-  // locationTextが変更されたときの処理
+  // プランが変更されたときの処理
   useEffect(() => {
-    if (!locationText || !googleRef.current || !directionsServiceRef.current || !directionsRendererRef.current) return;
+    if (!plan || !googleRef.current || !directionsServiceRef.current || !directionsRendererRef.current) return;
+
+    console.log('Updating map with plan:', plan);
 
     // 既存のマーカーをクリア
     markersRef.current.forEach(marker => {
-      marker.map = null;  // マーカーを地図から削除
+      marker.map = null;
     });
-    markersRef.current = [];  // マーカー配列をリセット
+    markersRef.current = [];
 
     // ルートをクリア
     directionsRendererRef.current.setDirections({ routes: [] });
 
-    const locations = JSON.parse(locationText);
-    if (!locations.length) return;
+    const locations = plan.locations;
+    if (!locations || !locations.length) return;
 
     // 情報ウィンドウの初期化
     if (!infoWindowRef.current) {
@@ -102,7 +100,6 @@ const MapDisplay = ({ route, locationText, onLocationUpdate }) => {
 
     const setupRoute = async () => {
       try {
-        // すべての場所の座標と情報を取得
         const locationDetails = await Promise.all(locations.map(geocodeLocation));
         
         if (locationDetails.length > 0) {
@@ -125,7 +122,6 @@ const MapDisplay = ({ route, locationText, onLocationUpdate }) => {
             if (status === 'OK') {
               directionsRendererRef.current.setDirections(result);
               
-              // 新しいマーカーを作成し、配列に追加
               locationDetails.forEach((detail, index) => {
                 const markerView = new googleRef.current.maps.marker.AdvancedMarkerElement({
                   map: mapInstanceRef.current,
@@ -146,14 +142,15 @@ const MapDisplay = ({ route, locationText, onLocationUpdate }) => {
                   infoWindowRef.current.open(mapInstanceRef.current, markerView);
                 });
 
-                markersRef.current.push(markerView);  // マーカーを配列に追加
+                markersRef.current.push(markerView);
               });
 
-              const path = result.routes[0].overview_path.map(point => ({
-                lat: point.lat(),
-                lng: point.lng()
-              }));
-              onLocationUpdate({ center: origin, path });
+              // 地図の表示領域を調整
+              const bounds = new googleRef.current.maps.LatLngBounds();
+              locationDetails.forEach(detail => {
+                bounds.extend(detail.position);
+              });
+              mapInstanceRef.current.fitBounds(bounds);
             }
           });
         }
@@ -162,7 +159,6 @@ const MapDisplay = ({ route, locationText, onLocationUpdate }) => {
       }
     };
 
-    // マーカーの見た目を作成する関数
     const buildMarkerContent = (number) => {
       const content = document.createElement('div');
       content.classList.add('marker');
@@ -180,9 +176,9 @@ const MapDisplay = ({ route, locationText, onLocationUpdate }) => {
     };
 
     setupRoute();
-  }, [locationText, onLocationUpdate]);
+  }, [plan]);
 
-  return <div ref={mapRef} style={{ height: '500px', width: '100%' }} />;
+  return <div ref={mapRef} style={{ height: '100%', width: '100%' }} />;
 };
 
 export default MapDisplay;

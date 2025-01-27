@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import InputForm from './InputForm';
 import MapDisplay from './MapDisplay';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Container, Paper, Typography, Box, CircularProgress } from '@mui/material';
+import { Container, Paper, Typography, Box, CircularProgress, Grid, List, ListItem, ListItemText, Divider, Alert } from '@mui/material';
 
 const App = () => {
   const [route, setRoute] = useState({
@@ -10,22 +10,47 @@ const App = () => {
     path: [{ lat: 35.681236, lng: 139.767125 }]
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [planText, setPlanText] = useState('');
   const [locationText, setLocationText] = useState('');  // 追加
+  const [currentPlan, setCurrentPlan] = useState(null);
+  const [savedPlans, setSavedPlans] = useState([]);
+
+  useEffect(() => {
+    fetchSavedPlans();
+  }, []);
+
+  const fetchSavedPlans = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/plans');
+      if (response.ok) {
+        const plans = await response.json();
+        setSavedPlans(plans);
+      }
+    } catch (error) {
+      console.error('Failed to fetch saved plans:', error);
+      setError('保存済みプランの取得に失敗しました');
+    }
+  };
 
   const handlePlanSubmit = async (purpose, range) => {
-    // 既存のデータをクリア
+    setError('');
     setPlanText('');
     setLocationText('');
-    setRoute({
-      center: { lat: 35.681236, lng: 139.767125 }, // 東京駅に戻す
-      path: [{ lat: 35.681236, lng: 139.767125 }]
-    });
+    setCurrentPlan(null);
+    
+    if (!process.env.REACT_APP_GEMINI_API_KEY) {
+      setError('Gemini APIキーが設定されていません');
+      return;
+    }
     
     setLoading(true);
     try {
       const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      
+      console.log('Generating plan with:', { purpose, range });
+      
       const prompt = `
 次の制約条件で行動プランを作成し、以下のJSON形式で返答してください：
 {
@@ -57,90 +82,109 @@ const App = () => {
       const response = await result.response;
       const text = response.text();
       
-      // より堅牢なJSON文字列のクリーニング
-      const jsonText = text
-        .replace(/```(?:json)?\n?/g, '')  // コードブロックの削除
-        .replace(/`/g, '')  // バッククォートの削除
-        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')  // 制御文字の削除
-        .replace(/\n/g, '\\n')  // 改行を適切にエスケープ
-        .replace(/\*\*/g, '')   // Markdown の強調記号を削除
-        .replace(/\s*-\s*/g, '・')  // 箇条書きの記号を統一
-        .trim();  // 前後の空白を削除
+      console.log('API Response:', text);
       
-      console.log('Original text:', text);
-      console.log('Cleaned JSON text:', jsonText);
+      const jsonText = text
+        .replace(/```(?:json)?\n?/g, '')
+        .replace(/`/g, '')
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+        .replace(/\n/g, '\\n')
+        .replace(/\*\*/g, '')
+        .replace(/\s*-\s*/g, '・')
+        .trim();
       
       try {
         const jsonResponse = JSON.parse(jsonText);
-        console.log('Parsed JSON:', jsonResponse);
+        console.log('Parsed plan:', jsonResponse);
         
-        // detailsの改行を適切に処理
         const formattedDetails = jsonResponse.details
-          .replace(/\\n/g, '\n')  // エスケープされた改行を実際の改行に変換
+          .replace(/\\n/g, '\n')
           .trim();
         
         setPlanText(formattedDetails);
+        setLocationText(JSON.stringify(jsonResponse.locations));
 
-        // すべての場所を取得
-        const locations = jsonResponse.locations;
-        if (locations && locations.length > 0) {
-          setLocationText(JSON.stringify(locations));
-        }
+        const newPlan = {
+          purpose,
+          range,
+          planText: formattedDetails,
+          locations: jsonResponse.locations,
+          title: jsonResponse.title
+        };
+        
+        setCurrentPlan(newPlan);
+        console.log('Setting current plan:', newPlan);
       } catch (jsonError) {
         console.error('JSON parsing error:', jsonError);
-        console.error('Failed to parse text:', jsonText);
-        // エラーメッセージをユーザーに表示
-        setPlanText('申し訳ありません。プランの生成中にエラーが発生しました。もう一度お試しください。');
+        setError('プランの生成中にエラーが発生しました。もう一度お試しください。');
       }
     } catch (error) {
       console.error('API request error:', error);
+      setError('APIリクエスト中にエラーが発生しました。もう一度お試しください。');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom sx={{ textAlign: 'center', mb: 4 }}>
-        プラン生成地図AI
-      </Typography>
-      
-      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
-        <Box sx={{ flex: 1 }}>
-          <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-            <InputForm onPlanSubmit={handlePlanSubmit} />
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+            <InputForm onPlanSubmit={handlePlanSubmit} currentPlan={currentPlan} />
+            
+            {loading && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <CircularProgress />
+              </Box>
+            )}
+            
+            {error && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {error}
+              </Alert>
+            )}
+            
+            {planText && !loading && !error && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  生成されたプラン
+                </Typography>
+                <Typography component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {planText}
+                </Typography>
+              </Box>
+            )}
           </Paper>
-          
-          {loading ? (
-            <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
-              <CircularProgress />
-              <Typography sx={{ mt: 2 }}>プラン作成中...</Typography>
-            </Paper>
-          ) : planText && (
-            <Paper elevation={3} sx={{ p: 3 }}>
-              <Typography 
-                component="pre"
-                sx={{ 
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'inherit',
-                  fontSize: '1rem',
-                  lineHeight: 1.7
-                }}
-              >
-                {planText}
+
+          {savedPlans.length > 0 && (
+            <Paper sx={{ p: 2, mt: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                保存済みプラン
               </Typography>
+              <List>
+                {savedPlans.map((plan, index) => (
+                  <React.Fragment key={plan.id}>
+                    <ListItem button onClick={() => setCurrentPlan(plan)}>
+                      <ListItemText
+                        primary={plan.purpose}
+                        secondary={`${plan.range} - ${new Date(plan.created_at).toLocaleDateString()}`}
+                      />
+                    </ListItem>
+                    {index < savedPlans.length - 1 && <Divider />}
+                  </React.Fragment>
+                ))}
+              </List>
             </Paper>
           )}
-        </Box>
-        
-        <Paper elevation={3} sx={{ flex: 1, overflow: 'hidden' }}>
-          <MapDisplay 
-            route={route} 
-            locationText={locationText}  // 追加
-            onLocationUpdate={setRoute}
-          />
-        </Paper>
-      </Box>
+        </Grid>
+
+        <Grid item xs={12} md={8}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '70vh' }}>
+            <MapDisplay plan={currentPlan} />
+          </Paper>
+        </Grid>
+      </Grid>
     </Container>
   );
 };
