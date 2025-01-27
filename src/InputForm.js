@@ -48,6 +48,9 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
           message: 'プランを保存しました',
           severity: 'success'
         });
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       } else {
         throw new Error('保存に失敗しました');
       }
@@ -115,7 +118,7 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
           プラン作成
         </Button>
 
-        {currentPlan && (
+        {currentPlan && !currentPlan.id && (
           <Button 
             onClick={handleSave}
             variant="contained"

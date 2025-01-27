@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import InputForm from './InputForm';
 import MapDisplay from './MapDisplay';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Container, Paper, Typography, Box, CircularProgress, Grid, List, ListItem, ListItemText, Divider, Alert } from '@mui/material';
+import { Container, Paper, Typography, Box, CircularProgress, Grid, List, ListItem, ListItemText, Divider, Alert, IconButton } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 const App = () => {
   const [route, setRoute] = useState({
@@ -21,14 +22,21 @@ const App = () => {
   }, []);
 
   const fetchSavedPlans = async () => {
+    console.log('Fetching saved plans...');
     try {
       const response = await fetch('http://localhost:5000/api/plans');
+      console.log('Fetch response:', response);
+      
       if (response.ok) {
         const plans = await response.json();
+        console.log('Fetched plans:', plans);
         setSavedPlans(plans);
+      } else {
+        console.error('Failed to fetch plans:', response.status, response.statusText);
+        setError('保存済みプランの取得に失敗しました');
       }
     } catch (error) {
-      console.error('Failed to fetch saved plans:', error);
+      console.error('Error fetching saved plans:', error);
       setError('保存済みプランの取得に失敗しました');
     }
   };
@@ -126,6 +134,46 @@ const App = () => {
     }
   };
 
+  const handleDeletePlan = async (id, event) => {
+    event.stopPropagation(); // リストアイテムのクリックイベントを停止
+    try {
+      const response = await fetch(`http://localhost:5000/api/plans/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        // 現在表示中のプランが削除された場合、表示をクリア
+        if (currentPlan && currentPlan.id === id) {
+          setCurrentPlan(null);
+          setPlanText('');
+          setLocationText('');
+        }
+        // 保存済みプラン一覧を更新
+        fetchSavedPlans();
+      } else {
+        setError('プランの削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('Error deleting plan:', error);
+      setError('プランの削除に失敗しました');
+    }
+  };
+
+  const handleSavedPlanClick = (plan) => {
+    // 保存済みプランのデータ形式を新規生成時と同じ形式に変換
+    const formattedPlan = {
+      ...plan,
+      planText: plan.plan_text,
+      locations: typeof plan.locations === 'string' ? JSON.parse(plan.locations) : plan.locations,
+      route: typeof plan.route === 'string' ? JSON.parse(plan.route) : plan.route
+    };
+    
+    setCurrentPlan(formattedPlan);
+    setPlanText(formattedPlan.plan_text);
+    setLocationText(JSON.stringify(formattedPlan.locations));
+    setError('');
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Grid container spacing={3}>
@@ -145,14 +193,56 @@ const App = () => {
               </Alert>
             )}
             
-            {planText && !loading && !error && (
+            {(planText || currentPlan) && !loading && !error && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="h6" gutterBottom>
-                  生成されたプラン
+                  {currentPlan && currentPlan.id ? '保存済みプラン' : '生成されたプラン'}
                 </Typography>
-                <Typography component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
-                  {planText}
-                </Typography>
+
+                {/* 基本情報 */}
+                <Box sx={{ mb: 4 }}>
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    基本情報
+                  </Typography>
+                  <Box sx={{ pl: 2 }}>
+                    <Typography variant="subtitle1" gutterBottom>
+                      目的: {currentPlan?.purpose}
+                    </Typography>
+                    <Typography variant="subtitle1" gutterBottom>
+                      範囲: {currentPlan?.range}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* 訪問場所 */}
+                {currentPlan?.locations && (
+                  <Box>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      訪問場所
+                    </Typography>
+                    <Box sx={{ pl: 2 }}>
+                      {currentPlan.locations.map((location, index) => (
+                        <Box key={index} sx={{ 
+                          mb: 2,
+                          p: 2,
+                          bgcolor: 'background.paper',
+                          borderRadius: 1,
+                          boxShadow: 1
+                        }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                            {index + 1}. {location.name}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                            住所: {location.address}
+                          </Typography>
+                          <Typography variant="body1" sx={{ mt: 1 }}>
+                            {location.description}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
               </Box>
             )}
           </Paper>
@@ -165,7 +255,21 @@ const App = () => {
               <List>
                 {savedPlans.map((plan, index) => (
                   <React.Fragment key={plan.id}>
-                    <ListItem button onClick={() => setCurrentPlan(plan)}>
+                    <ListItem 
+                      button 
+                      onClick={() => handleSavedPlanClick(plan)}
+                      sx={{ pr: 8 }}
+                      secondaryAction={
+                        <IconButton 
+                          edge="end" 
+                          aria-label="delete"
+                          onClick={(e) => handleDeletePlan(plan.id, e)}
+                          sx={{ color: 'error.main' }}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      }
+                    >
                       <ListItemText
                         primary={plan.purpose}
                         secondary={`${plan.range} - ${new Date(plan.created_at).toLocaleDateString()}`}
