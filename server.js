@@ -2,7 +2,7 @@
 const express = require('express');
 const { Client } = require('pg');
 const cors = require('cors');
-require('dotenv').config();
+require('dotenv').config({ path: '.env.local' });
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -12,6 +12,7 @@ app.use(express.json()); // JSONリクエストを解析
 
 const client = new Client({
   connectionString: process.env.DATABASE_URL,
+  ssl: false
 });
 
 client.connect();
