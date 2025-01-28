@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googleApi }) => {
+const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googleApi, rangeType = 'circle' }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const directionsServiceRef = useRef(null);
@@ -8,6 +8,15 @@ const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googl
   const infoWindowRef = useRef(null);
   const markersRef = useRef([]);
   const circleRef = useRef(null);
+
+  // 円を表示すべきかどうかを判定
+  const shouldShowCircle = () => {
+    // 保存済みプランを表示中の場合
+    if (plan?.id) return false;
+    // テキストによる指定の場合
+    if (rangeType === 'text') return false;
+    return true;
+  };
 
   // 地図の初期化
   useEffect(() => {
@@ -28,13 +37,22 @@ const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googl
             suppressMarkers: true
           });
 
-          // 地図クリックで円の中心点を設定
-          mapInstanceRef.current.addListener('click', (event) => {
-            const newCenter = event.latLng.toJSON();
-            if (onCircleChange) {
-              onCircleChange(newCenter, radius);
-            }
-          });
+          infoWindowRef.current = new googleApi.maps.InfoWindow();
+        }
+
+        // 既存のクリックリスナーを削除
+        if (mapInstanceRef.current) {
+          googleApi.maps.event.clearListeners(mapInstanceRef.current, 'click');
+          
+          // 円による指定の場合のみ、クリックリスナーを追加
+          if (shouldShowCircle()) {
+            mapInstanceRef.current.addListener('click', (event) => {
+              if (onCircleChange) {
+                const newCenter = event.latLng.toJSON();
+                onCircleChange(newCenter, radius);
+              }
+            });
+          }
         }
 
       } catch (error) {
@@ -43,7 +61,7 @@ const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googl
     }
 
     initializeMap();
-  }, [googleApi]);
+  }, [googleApi, rangeType, plan]);
 
   // 円の更新
   const updateCircle = (center, radius) => {
@@ -53,24 +71,39 @@ const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googl
       circleRef.current.setMap(null);
     }
 
-    circleRef.current = new googleApi.maps.Circle({
-      strokeColor: '#FF0000',
-      strokeOpacity: 0.8,
-      strokeWeight: 2,
-      fillColor: '#FF0000',
-      fillOpacity: 0.35,
-      map: mapInstanceRef.current,
-      center: center,
-      radius: Number(radius),
-    });
+    if (shouldShowCircle() && center) {
+      circleRef.current = new googleApi.maps.Circle({
+        strokeColor: '#FF0000',
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        fillColor: '#FF0000',
+        fillOpacity: 0.35,
+        map: mapInstanceRef.current,
+        center: center,
+        radius: Number(radius),
+        clickable: true
+      });
+
+      // 円のクリックイベントを追加
+      circleRef.current.addListener('click', (event) => {
+        if (onCircleChange) {
+          const newCenter = event.latLng.toJSON();
+          onCircleChange(newCenter, radius);
+        }
+      });
+    }
   };
 
   // 円の更新処理
   useEffect(() => {
     if (googleApi && mapInstanceRef.current && initialCenter) {
-      updateCircle(initialCenter, radius || 1000);
+      if (shouldShowCircle()) {
+        updateCircle(initialCenter, radius || 1000);
+      } else if (circleRef.current) {
+        circleRef.current.setMap(null);
+      }
     }
-  }, [initialCenter, radius, googleApi]);
+  }, [initialCenter, radius, googleApi, rangeType, plan]);
 
   // プランが変更されたときの処理
   useEffect(() => {
