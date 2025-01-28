@@ -8,7 +8,11 @@ require('dotenv').config({ path: '.env.local' });
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors()); // CORSを許可
+app.use(cors({
+  origin: true, // 全てのオリジンを許可する場合
+  methods: ['GET', 'POST', 'DELETE'],
+  credentials: true
+ }));
 app.use(express.json()); // JSONリクエストを解析
 
 const client = new Client({
