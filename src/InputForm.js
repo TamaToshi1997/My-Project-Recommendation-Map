@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SaveIcon from '@mui/icons-material/Save';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) => {
   const [purpose, setPurpose] = useState('');
@@ -100,16 +101,30 @@ const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) =>
     setSnackbar(prev => ({ ...prev, open: false }));
   };
 
+  const handleReset = () => {
+    window.location.reload();
+  };
+
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
-      <Typography variant="h6" gutterBottom sx={{
-        fontFamily: "'Segoe UI', 'Comic Sans MS', cursive",
-        fontWeight: 'bold',
-        color: '#1976d2',
-        letterSpacing: '0.1em'
-      }}>
-        プラン作成
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6" sx={{
+          fontFamily: "'Segoe UI', 'Comic Sans MS', cursive",
+          fontWeight: 'bold',
+          color: '#1976d2',
+          letterSpacing: '0.1em'
+        }}>
+          プラン作成
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={handleReset}
+          sx={{ minWidth: 'auto' }}
+        >
+          リセット
+        </Button>
+      </Box>
       
       <TextField
         fullWidth

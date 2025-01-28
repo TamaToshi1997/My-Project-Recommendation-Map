@@ -103,10 +103,32 @@ const App = () => {
               }
             });
           });
+
+          // 緯度・経度の範囲を計算
+          // 1度あたりの距離（メートル）を概算
+          const metersPerLatDegree = 111320; // 赤道上で1度あたり約111.32km
+          const metersPerLngDegree = Math.cos(circleInfo.center.lat * Math.PI / 180) * 111320; // 緯度に応じて補正
+
+          // 半径をもとに緯度・経度の範囲を計算
+          const latRange = circleInfo.radius / metersPerLatDegree;
+          const lngRange = circleInfo.radius / metersPerLngDegree;
+
+          const bounds = {
+            north: circleInfo.center.lat + latRange,
+            south: circleInfo.center.lat - latRange,
+            east: circleInfo.center.lng + lngRange,
+            west: circleInfo.center.lng - lngRange
+          };
+
           locationContext = `
 中心地点の住所: ${result}
 中心座標: 緯度${circleInfo.center.lat}、経度${circleInfo.center.lng}
-範囲の半径: ${circleInfo.radius}メートル`;
+範囲の半径: ${circleInfo.radius}メートル
+検索範囲:
+- 北端: 緯度${bounds.north}
+- 南端: 緯度${bounds.south}
+- 東端: 経度${bounds.east}
+- 西端: 経度${bounds.west}`;
         } catch (error) {
           console.error('Geocoding error:', error);
           locationContext = `
