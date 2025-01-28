@@ -1,27 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TextField, 
   Button, 
   Box, 
   Typography,
   Snackbar,
-  Alert
+  Alert,
+  Slider
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SaveIcon from '@mui/icons-material/Save';
 
-const InputForm = ({ onPlanSubmit, currentPlan }) => {
+const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) => {
   const [purpose, setPurpose] = useState('');
-  const [range, setRange] = useState('');
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
     severity: 'success'
   });
 
+  const [circleRadius, setCircleRadius] = useState(circleInfo?.radius || 1000);
+
+  // circleInfoが変更されたときにradiusを更新
+  useEffect(() => {
+    if (circleInfo?.radius) {
+      setCircleRadius(circleInfo.radius);
+    }
+  }, [circleInfo]);
+
+  // スライダーの値が変更されたときの処理
+  const handleRadiusChange = (event, newValue) => {
+    setCircleRadius(newValue);
+    if (onCircleChange && circleInfo?.center) {
+      onCircleChange(circleInfo.center, newValue);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onPlanSubmit(purpose, range);
+    
+    let rangeInfo = '';
+    if (circleInfo?.center && circleRadius) {
+      rangeInfo = `中心座標: ${JSON.stringify(circleInfo.center)}, 半径: ${circleRadius}メートル`;
+    } else {
+      rangeInfo = '範囲指定なし';
+    }
+    
+    onPlanSubmit(purpose, rangeInfo);
   };
 
   const handleSave = async () => {
@@ -35,7 +60,7 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
         },
         body: JSON.stringify({
           purpose,
-          range,
+          range: `中心座標: ${JSON.stringify(circleInfo?.center)}, 半径: ${circleRadius}メートル`, // 円の情報を保存
           plan_text: currentPlan.planText,
           locations: currentPlan.locations,
           route: currentPlan.route
@@ -69,7 +94,7 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
 
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
-      <Typography variant="h6" gutterBottom sx={{ 
+      <Typography variant="h6" gutterBottom sx={{
         fontFamily: "'Segoe UI', 'Comic Sans MS', cursive",
         fontWeight: 'bold',
         color: '#1976d2',
@@ -88,21 +113,21 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
         required
         sx={{ mb: 3 }}
       />
-      
-      <TextField
-        fullWidth
-        label="行動範囲"
-        value={range}
-        onChange={(e) => setRange(e.target.value)}
-        margin="normal"
-        variant="outlined"
-        placeholder="例：東京駅周辺、渋谷・原宿エリア、浅草・上野エリアなど"
-        required
-        sx={{ mb: 3 }}
+        
+      <Typography id="range-slider" gutterBottom>
+        行動範囲 (半径: {circleRadius}m)
+      </Typography>
+      <Slider
+        value={circleRadius}
+        onChange={handleRadiusChange}
+        min={100}
+        max={5000}
+        step={100}
+        aria-labelledby="range-slider"
       />
 
       <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-        <Button 
+        <Button
           type="submit"
           variant="contained"
           fullWidth
@@ -119,7 +144,7 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
         </Button>
 
         {currentPlan && !currentPlan.id && (
-          <Button 
+          <Button
             onClick={handleSave}
             variant="contained"
             fullWidth
@@ -137,13 +162,13 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
         )}
       </Box>
 
-      <Snackbar 
-        open={snackbar.open} 
-        autoHideDuration={6000} 
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
         onClose={handleCloseSnackbar}
       >
-        <Alert 
-          onClose={handleCloseSnackbar} 
+        <Alert
+          onClose={handleCloseSnackbar}
           severity={snackbar.severity}
           sx={{ width: '100%' }}
         >

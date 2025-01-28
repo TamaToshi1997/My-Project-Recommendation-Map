@@ -4,6 +4,7 @@ import MapDisplay from './MapDisplay';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Container, Paper, Typography, Box, CircularProgress, Grid, List, ListItem, ListItemText, Divider, Alert, IconButton } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { Loader } from '@googlemaps/js-api-loader';
 
 const App = () => {
   const [route, setRoute] = useState({
@@ -16,6 +17,32 @@ const App = () => {
   const [locationText, setLocationText] = useState('');  // 追加
   const [currentPlan, setCurrentPlan] = useState(null);
   const [savedPlans, setSavedPlans] = useState([]);
+  const [googleApi, setGoogleApi] = useState(null);
+  
+  // 円の情報を管理
+  const [circleInfo, setCircleInfo] = useState({
+    center: { lat: 35.681236, lng: 139.767125 },
+    radius: 1000
+  });
+
+  // Google Maps APIの初期化
+  useEffect(() => {
+    const initGoogleMaps = async () => {
+      try {
+        const loader = new Loader({
+          apiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '',
+          version: 'weekly',
+          libraries: ['places', 'marker']
+        });
+        const google = await loader.load();
+        await google.maps.importLibrary("marker");
+        setGoogleApi(google);
+      } catch (error) {
+        console.error('Google Maps API initialization error:', error);
+      }
+    };
+    initGoogleMaps();
+  }, []);
 
   useEffect(() => {
     fetchSavedPlans();
@@ -51,13 +78,42 @@ const App = () => {
       setError('Gemini APIキーが設定されていません');
       return;
     }
+
+    if (!googleApi) {
+      setError('Google Maps APIの初期化中です');
+      return;
+    }
     
     setLoading(true);
     try {
       const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: "gemini-pro" });
       
-      console.log('Generating plan with:', { purpose, range });
+      // 円の中心座標から住所を取得
+      let locationContext = '';
+      if (circleInfo.center) {
+        try {
+          const geocoder = new googleApi.maps.Geocoder();
+          const result = await new Promise((resolve, reject) => {
+            geocoder.geocode({ location: circleInfo.center }, (results, status) => {
+              if (status === 'OK' && results[0]) {
+                resolve(results[0].formatted_address);
+              } else {
+                reject(status);
+              }
+            });
+          });
+          locationContext = `
+中心地点の住所: ${result}
+中心座標: 緯度${circleInfo.center.lat}、経度${circleInfo.center.lng}
+範囲の半径: ${circleInfo.radius}メートル`;
+        } catch (error) {
+          console.error('Geocoding error:', error);
+          locationContext = `
+中心座標: 緯度${circleInfo.center.lat}、経度${circleInfo.center.lng}
+範囲の半径: ${circleInfo.radius}メートル`;
+        }
+      }
       
       const prompt = `
 次の制約条件で行動プランを作成し、以下のJSON形式で返答してください：
@@ -75,22 +131,25 @@ const App = () => {
 
 制約条件：
 目的: ${purpose}
-行動範囲: ${range}
+行動範囲: ${locationContext || range}
 
 注意：
-- locationsは必ず1つ以上含めてください
+- locationsは必ず2つ以上含めてください
 - 場所の名前は具体的な施設名や地名を指定してください
 - addressは必ず正確な住所を記載してください（例：東京都渋谷区神宮前1-1-1）
 - detailsは必ずlocationsの順番に対応したナンバリングを含めてください
 - Markdown記法は使用せず、プレーンテキストで記述してください
-- 箇条書きには「・」を使用してください
+- 全てのlocationsは指定された中心地点から半径${circleInfo.radius*0.7}メートル以内の場所を選んでください
+- 出力するlocationsは全て指定された中心地点から半径${circleInfo.radius*0.7}メートル以内にあるか確認し、条件を満たしていなかった場合は再生成してください
 `;
 
+      console.log('Sending prompt to Gemini:', prompt);
+      
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
       
-      console.log('API Response:', text);
+      console.log('Gemini Response:', text);
       
       const jsonText = text
         .replace(/```(?:json)?\n?/g, '')
@@ -114,7 +173,7 @@ const App = () => {
 
         const newPlan = {
           purpose,
-          range,
+          range: locationContext || range,
           planText: formattedDetails,
           locations: jsonResponse.locations,
           title: jsonResponse.title
@@ -132,6 +191,11 @@ const App = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 円の情報が変更されたときの処理
+  const handleCircleChange = (center, radius) => {
+    setCircleInfo({ center, radius });
   };
 
   const handleDeletePlan = async (id, event) => {
@@ -179,7 +243,12 @@ const App = () => {
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
-            <InputForm onPlanSubmit={handlePlanSubmit} currentPlan={currentPlan} />
+            <InputForm 
+              onPlanSubmit={handlePlanSubmit} 
+              currentPlan={currentPlan} 
+              onCircleChange={handleCircleChange}
+              circleInfo={circleInfo}
+            />
             
             {loading && (
               <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
@@ -284,8 +353,14 @@ const App = () => {
         </Grid>
 
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '70vh' }}>
-            <MapDisplay plan={currentPlan} />
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '600px' }}>
+            <MapDisplay 
+              plan={currentPlan}
+              onCircleChange={handleCircleChange}
+              radius={circleInfo.radius}
+              center={circleInfo.center}
+              googleApi={googleApi}
+            />
           </Paper>
         </Grid>
       </Grid>
