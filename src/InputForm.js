@@ -6,7 +6,11 @@ import {
   Typography,
   Snackbar,
   Alert,
-  Slider
+  Slider,
+  FormControl,
+  FormControlLabel,
+  RadioGroup,
+  Radio
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SaveIcon from '@mui/icons-material/Save';
@@ -20,6 +24,8 @@ const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) =>
   });
 
   const [circleRadius, setCircleRadius] = useState(circleInfo?.radius || 1000);
+  const [rangeType, setRangeType] = useState('circle');
+  const [textRange, setTextRange] = useState('');
 
   // circleInfoが変更されたときにradiusを更新
   useEffect(() => {
@@ -40,10 +46,10 @@ const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) =>
     e.preventDefault();
     
     let rangeInfo = '';
-    if (circleInfo?.center && circleRadius) {
+    if (rangeType === 'circle' && circleInfo?.center && circleRadius) {
       rangeInfo = `中心座標: ${JSON.stringify(circleInfo.center)}, 半径: ${circleRadius}メートル`;
-    } else {
-      rangeInfo = '範囲指定なし';
+    } else if (rangeType === 'text') {
+      rangeInfo = textRange;
     }
     
     onPlanSubmit(purpose, rangeInfo);
@@ -60,7 +66,9 @@ const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) =>
         },
         body: JSON.stringify({
           purpose,
-          range: `中心座標: ${JSON.stringify(circleInfo?.center)}, 半径: ${circleRadius}メートル`, // 円の情報を保存
+          range: rangeType === 'circle' 
+            ? `中心座標: ${JSON.stringify(circleInfo?.center)}, 半径: ${circleRadius}メートル`
+            : textRange,
           plan_text: currentPlan.planText,
           locations: currentPlan.locations,
           route: currentPlan.route
@@ -102,6 +110,7 @@ const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) =>
       }}>
         プラン作成
       </Typography>
+      
       <TextField
         fullWidth
         label="目的"
@@ -113,18 +122,54 @@ const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) =>
         required
         sx={{ mb: 3 }}
       />
-        
-      <Typography id="range-slider" gutterBottom>
-        行動範囲 (半径: {circleRadius}m)
-      </Typography>
-      <Slider
-        value={circleRadius}
-        onChange={handleRadiusChange}
-        min={100}
-        max={5000}
-        step={100}
-        aria-labelledby="range-slider"
-      />
+
+      <FormControl component="fieldset" sx={{ mb: 2 }}>
+        <Typography gutterBottom>
+          行動範囲の指定方法
+        </Typography>
+        <RadioGroup
+          value={rangeType}
+          onChange={(e) => setRangeType(e.target.value)}
+        >
+          <FormControlLabel 
+            value="circle" 
+            control={<Radio />} 
+            label="地図上で円を描いて指定" 
+          />
+          <FormControlLabel 
+            value="text" 
+            control={<Radio />} 
+            label="テキストで指定" 
+          />
+        </RadioGroup>
+      </FormControl>
+
+      {rangeType === 'circle' ? (
+        <>
+          <Typography id="range-slider" gutterBottom>
+            行動範囲 (半径: {circleRadius}m)
+          </Typography>
+          <Slider
+            value={circleRadius}
+            onChange={handleRadiusChange}
+            min={100}
+            max={5000}
+            step={100}
+            aria-labelledby="range-slider"
+          />
+        </>
+      ) : (
+        <TextField
+          fullWidth
+          label="行動範囲"
+          value={textRange}
+          onChange={(e) => setTextRange(e.target.value)}
+          margin="normal"
+          variant="outlined"
+          placeholder="例：渋谷駅周辺、東京タワー付近、など"
+          required
+        />
+      )}
 
       <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
         <Button
