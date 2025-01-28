@@ -24,7 +24,7 @@ const App = () => {
   const fetchSavedPlans = async () => {
     console.log('Fetching saved plans...');
     try {
-      const response = await fetch('http://localhost:5000/api/plans');
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/plans`);
       console.log('Fetch response:', response);
       
       if (response.ok) {
@@ -137,7 +137,7 @@ const App = () => {
   const handleDeletePlan = async (id, event) => {
     event.stopPropagation(); // リストアイテムのクリックイベントを停止
     try {
-      const response = await fetch(`http://localhost:5000/api/plans/${id}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/plans/${id}`, {
         method: 'DELETE',
       });
       
