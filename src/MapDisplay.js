@@ -11,9 +11,7 @@ const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googl
 
   // 円を表示すべきかどうかを判定
   const shouldShowCircle = () => {
-    // 保存済みプランを表示中の場合
-    if (plan?.id) return false;
-    // テキストによる指定の場合
+    // テキストによる指定の場合のみ非表示
     if (rangeType === 'text') return false;
     return true;
   };
