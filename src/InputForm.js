@@ -1,27 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TextField, 
   Button, 
   Box, 
   Typography,
   Snackbar,
-  Alert
+  Alert,
+  Slider,
+  FormControl,
+  FormControlLabel,
+  RadioGroup,
+  Radio
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SaveIcon from '@mui/icons-material/Save';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
-const InputForm = ({ onPlanSubmit, currentPlan }) => {
+const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo, rangeType, setRangeType }) => {
   const [purpose, setPurpose] = useState('');
-  const [range, setRange] = useState('');
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
     severity: 'success'
   });
+  const handleRangeTypeChange = (event) => {
+    setRangeType(event.target.value); // 親コンポーネントの状態を更新
+  };
+
+  const [circleRadius, setCircleRadius] = useState(circleInfo?.radius || 1000);
+  const [textRange, setTextRange] = useState('');
+
+  // circleInfoが変更されたときにradiusを更新
+  useEffect(() => {
+    if (circleInfo?.radius) {
+      setCircleRadius(circleInfo.radius);
+    }
+  }, [circleInfo]);
+
+  // スライダーの値が変更されたときの処理
+  const handleRadiusChange = (event, newValue) => {
+    setCircleRadius(newValue);
+    if (onCircleChange && circleInfo?.center) {
+      onCircleChange(circleInfo.center, newValue);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onPlanSubmit(purpose, range);
+    
+    let rangeInfo = '';
+    if (rangeType === 'circle' && circleInfo?.center && circleRadius) {
+      rangeInfo = `中心座標: ${JSON.stringify(circleInfo.center)}, 半径: ${circleRadius}メートル`;
+    } else if (rangeType === 'text') {
+      rangeInfo = textRange;
+    }
+    
+    onPlanSubmit(purpose, rangeInfo);
   };
 
   const handleSave = async () => {
@@ -35,7 +69,9 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
         },
         body: JSON.stringify({
           purpose,
-          range,
+          range: rangeType === 'circle' 
+            ? `中心座標: ${JSON.stringify(circleInfo?.center)}, 半径: ${circleRadius}メートル`
+            : textRange,
           plan_text: currentPlan.planText,
           locations: currentPlan.locations,
           route: currentPlan.route
@@ -67,16 +103,31 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
     setSnackbar(prev => ({ ...prev, open: false }));
   };
 
+  const handleReset = () => {
+    window.location.reload();
+  };
+
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
-      <Typography variant="h6" gutterBottom sx={{ 
-        fontFamily: "'Segoe UI', 'Comic Sans MS', cursive",
-        fontWeight: 'bold',
-        color: '#1976d2',
-        letterSpacing: '0.1em'
-      }}>
-        プラン作成
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6" sx={{
+          fontFamily: "'Segoe UI', 'Comic Sans MS', cursive",
+          fontWeight: 'bold',
+          color: '#1976d2',
+          letterSpacing: '0.1em'
+        }}>
+          プラン作成
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={handleReset}
+          sx={{ minWidth: 'auto' }}
+        >
+          リセット
+        </Button>
+      </Box>
+      
       <TextField
         fullWidth
         label="目的"
@@ -88,21 +139,57 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
         required
         sx={{ mb: 3 }}
       />
-      
-      <TextField
-        fullWidth
-        label="行動範囲"
-        value={range}
-        onChange={(e) => setRange(e.target.value)}
-        margin="normal"
-        variant="outlined"
-        placeholder="例：東京駅周辺、渋谷・原宿エリア、浅草・上野エリアなど"
-        required
-        sx={{ mb: 3 }}
-      />
+
+      <FormControl component="fieldset" sx={{ mb: 2 }}>
+        <Typography gutterBottom>
+          行動範囲の指定方法
+        </Typography>
+        <RadioGroup
+          value={rangeType}
+          onChange={handleRangeTypeChange}
+        >
+          <FormControlLabel 
+            value="circle" 
+            control={<Radio />} 
+            label="地図上で円を描いて指定" 
+          />
+          <FormControlLabel 
+            value="text" 
+            control={<Radio />} 
+            label="テキストで指定" 
+          />
+        </RadioGroup>
+      </FormControl>
+
+      {rangeType === 'circle' ? (
+        <>
+          <Typography id="range-slider" gutterBottom>
+            行動範囲 (半径: {circleRadius}m)
+          </Typography>
+          <Slider
+            value={circleRadius}
+            onChange={handleRadiusChange}
+            min={500}
+            max={5000}
+            step={100}
+            aria-labelledby="range-slider"
+          />
+        </>
+      ) : (
+        <TextField
+          fullWidth
+          label="行動範囲"
+          value={textRange}
+          onChange={(e) => setTextRange(e.target.value)}
+          margin="normal"
+          variant="outlined"
+          placeholder="例：渋谷駅周辺、東京タワー付近、など"
+          required
+        />
+      )}
 
       <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-        <Button 
+        <Button
           type="submit"
           variant="contained"
           fullWidth
@@ -119,7 +206,7 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
         </Button>
 
         {currentPlan && !currentPlan.id && (
-          <Button 
+          <Button
             onClick={handleSave}
             variant="contained"
             fullWidth
@@ -137,13 +224,13 @@ const InputForm = ({ onPlanSubmit, currentPlan }) => {
         )}
       </Box>
 
-      <Snackbar 
-        open={snackbar.open} 
-        autoHideDuration={6000} 
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
         onClose={handleCloseSnackbar}
       >
-        <Alert 
-          onClose={handleCloseSnackbar} 
+        <Alert
+          onClose={handleCloseSnackbar}
           severity={snackbar.severity}
           sx={{ width: '100%' }}
         >

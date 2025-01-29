@@ -1,85 +1,136 @@
 import React, { useEffect, useRef } from 'react';
-import { Loader } from '@googlemaps/js-api-loader';
 
-const MapDisplay = ({ plan }) => {
+const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googleApi, rangeType}) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const directionsServiceRef = useRef(null);
   const directionsRendererRef = useRef(null);
-  const googleRef = useRef(null);
   const infoWindowRef = useRef(null);
   const markersRef = useRef([]);
+  const circleRef = useRef(null);
 
-  // マップの初期化
+  // 円を表示すべきかどうかを判定
+  const shouldShowCircle = () => {
+    return rangeType === "circle"; // `circle` の場合にのみ円を描画
+  };
+
+  // 地図の初期化
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !googleApi) return;
 
     const initializeMap = async () => {
       try {
-        console.log('Initializing map...');
-        const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
-        console.log('API Key status:', apiKey ? 'Present' : 'Missing');
-        
-        const loader = new Loader({
-          apiKey: apiKey || '',
-          version: 'weekly'
-        });
-
-        const google = await loader.load();
-        googleRef.current = google;
-
-        await google.maps.importLibrary("places");
-        await google.maps.importLibrary("marker");
-
-        const initialCenter = { lat: 35.681236, lng: 139.767125 };
-        
         if (!mapInstanceRef.current) {
-          mapInstanceRef.current = new google.maps.Map(mapRef.current, {
+          mapInstanceRef.current = new googleApi.maps.Map(mapRef.current, {
             center: initialCenter,
             zoom: 12,
             mapId: process.env.REACT_APP_GOOGLE_MAPS_ID
           });
 
-          directionsServiceRef.current = new google.maps.DirectionsService();
-          directionsRendererRef.current = new google.maps.DirectionsRenderer({
+          directionsServiceRef.current = new googleApi.maps.DirectionsService();
+          directionsRendererRef.current = new googleApi.maps.DirectionsRenderer({
             map: mapInstanceRef.current,
             suppressMarkers: true
           });
+
+          infoWindowRef.current = new googleApi.maps.InfoWindow();
         }
+
+        // 既存のクリックリスナーを削除
+        if (mapInstanceRef.current) {
+          googleApi.maps.event.clearListeners(mapInstanceRef.current, 'click');
+          
+          // 円による指定の場合のみ、クリックリスナーを追加
+          if (shouldShowCircle()) {
+            mapInstanceRef.current.addListener('click', (event) => {
+              if (onCircleChange) {
+                const newCenter = event.latLng.toJSON();
+                onCircleChange(newCenter, radius);
+              }
+            });
+          }
+        }
+
       } catch (error) {
         console.error('Map initialization error:', error);
       }
-    };
+    }
 
     initializeMap();
-  }, []);
+  }, [googleApi, rangeType, radius]);
+
+  // 円の更新
+  const updateCircle = (center, radius) => {
+    if (!googleApi || !mapInstanceRef.current) return;
+
+    if (circleRef.current) {
+      circleRef.current.setMap(null);
+    }
+
+    if (shouldShowCircle() && center) {
+      circleRef.current = new googleApi.maps.Circle({
+        strokeColor: '#FF0000',
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        fillColor: '#FF0000',
+        fillOpacity: 0.35,
+        map: mapInstanceRef.current,
+        center: center,
+        radius: Number(radius),
+        clickable: true
+      });
+
+      // 円のクリックイベントを追加
+      circleRef.current.addListener('click', (event) => {
+        if (onCircleChange) {
+          const newCenter = event.latLng.toJSON();
+          onCircleChange(newCenter, radius);
+        }
+      });
+    }
+  };
+
+  // 円の更新処理
+  useEffect(() => {
+    if (googleApi && mapInstanceRef.current && initialCenter) {
+      if (shouldShowCircle()) {
+        console.log("円を描画する条件が満たされています");
+        updateCircle(initialCenter, radius || 1000);
+      } else if (circleRef.current) {
+        console.log("円を非表示にします");
+        circleRef.current.setMap(null);// 円を削除
+      }
+    }
+  }, [initialCenter, radius, googleApi, rangeType, plan]);
 
   // プランが変更されたときの処理
   useEffect(() => {
-    if (!plan || !googleRef.current || !directionsServiceRef.current || !directionsRendererRef.current) return;
-
-    console.log('Updating map with plan:', plan);
-
     // 既存のマーカーをクリア
     markersRef.current.forEach(marker => {
-      marker.map = null;
+      marker.setMap(null);  // setMap(null)を使用してマーカーを削除
     });
     markersRef.current = [];
 
     // ルートをクリア
-    directionsRendererRef.current.setDirections({ routes: [] });
+    if (directionsRendererRef.current) {
+      directionsRendererRef.current.setDirections({ routes: [] });
+    }
+
+    if (!plan || !googleApi || !directionsServiceRef.current || !directionsRendererRef.current) return;
+
+    console.log('Updating map with plan:', plan);
 
     const locations = plan.locations;
     if (!locations || !locations.length) return;
 
     // 情報ウィンドウの初期化
     if (!infoWindowRef.current) {
-      infoWindowRef.current = new googleRef.current.maps.InfoWindow();
+      infoWindowRef.current = new googleApi.maps.InfoWindow();
     }
 
     const geocodeLocation = (locationData) => {
       return new Promise((resolve, reject) => {
-        const geocoder = new googleRef.current.maps.Geocoder();
+        const geocoder = new googleApi.maps.Geocoder();
         geocoder.geocode({ address: locationData.address }, (results, status) => {
           if (status === 'OK' && results[0]) {
             resolve({
@@ -101,7 +152,7 @@ const MapDisplay = ({ plan }) => {
     const setupRoute = async () => {
       try {
         const locationDetails = await Promise.all(locations.map(geocodeLocation));
-        
+
         if (locationDetails.length > 0) {
           const origin = locationDetails[0].position;
           const destination = locationDetails[locationDetails.length - 1].position;
@@ -114,20 +165,20 @@ const MapDisplay = ({ plan }) => {
             origin,
             destination,
             waypoints,
-            travelMode: googleRef.current.maps.TravelMode.WALKING,
+            travelMode: googleApi.maps.TravelMode.WALKING,
             optimizeWaypoints: true
           };
 
           directionsServiceRef.current.route(request, (result, status) => {
             if (status === 'OK') {
               directionsRendererRef.current.setDirections(result);
-              
+
               locationDetails.forEach((detail, index) => {
-                const markerView = new googleRef.current.maps.marker.AdvancedMarkerElement({
+                const markerView = new googleApi.maps.Marker({
                   map: mapInstanceRef.current,
                   position: detail.position,
                   title: detail.name,
-                  content: buildMarkerContent(index + 1)
+                  label: String(index + 1)
                 });
 
                 markerView.addListener('click', () => {
@@ -146,7 +197,7 @@ const MapDisplay = ({ plan }) => {
               });
 
               // 地図の表示領域を調整
-              const bounds = new googleRef.current.maps.LatLngBounds();
+              const bounds = new googleApi.maps.LatLngBounds();
               locationDetails.forEach(detail => {
                 bounds.extend(detail.position);
               });
