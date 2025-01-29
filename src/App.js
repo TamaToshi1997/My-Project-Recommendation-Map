@@ -18,6 +18,7 @@ const App = () => {
   const [currentPlan, setCurrentPlan] = useState(null);
   const [savedPlans, setSavedPlans] = useState([]);
   const [googleApi, setGoogleApi] = useState(null);
+  const [rangeType, setRangeType] = useState("circle"); // 初期値
   
   // 円の情報を管理
   const [circleInfo, setCircleInfo] = useState({
@@ -91,36 +92,36 @@ const App = () => {
       
       // 円の中心座標から住所を取得
       let locationContext = '';
-      if (circleInfo.center) {
-        try {
-          const geocoder = new googleApi.maps.Geocoder();
-          const result = await new Promise((resolve, reject) => {
-            geocoder.geocode({ location: circleInfo.center }, (results, status) => {
-              if (status === 'OK' && results[0]) {
-                resolve(results[0].formatted_address);
-              } else {
-                reject(status);
-              }
+        if (circleInfo.center && rangeType === "circle") {
+          try {
+            const geocoder = new googleApi.maps.Geocoder();
+            const result = await new Promise((resolve, reject) => {
+              geocoder.geocode({ location: circleInfo.center }, (results, status) => {
+                if (status === 'OK' && results[0]) {
+                  resolve(results[0].formatted_address);
+                } else {
+                  reject(status);
+                }
+              });
             });
-          });
 
-          // 緯度・経度の範囲を計算
-          // 1度あたりの距離（メートル）を概算
-          const metersPerLatDegree = 111320; // 赤道上で1度あたり約111.32km
-          const metersPerLngDegree = Math.cos(circleInfo.center.lat * Math.PI / 180) * 111320; // 緯度に応じて補正
+            // 緯度・経度の範囲を計算
+            // 1度あたりの距離（メートル）を概算
+            const metersPerLatDegree = 111320; // 赤道上で1度あたり約111.32km
+            const metersPerLngDegree = Math.cos(circleInfo.center.lat * Math.PI / 180) * 111320; // 緯度に応じて補正
 
-          // 半径をもとに緯度・経度の範囲を計算
-          const latRange = circleInfo.radius / metersPerLatDegree;
-          const lngRange = circleInfo.radius / metersPerLngDegree;
+            // 半径をもとに緯度・経度の範囲を計算
+            const latRange = circleInfo.radius / metersPerLatDegree;
+            const lngRange = circleInfo.radius / metersPerLngDegree;
 
-          const bounds = {
-            north: circleInfo.center.lat + latRange,
-            south: circleInfo.center.lat - latRange,
-            east: circleInfo.center.lng + lngRange,
-            west: circleInfo.center.lng - lngRange
-          };
+            const bounds = {
+              north: circleInfo.center.lat + latRange,
+              south: circleInfo.center.lat - latRange,
+              east: circleInfo.center.lng + lngRange,
+              west: circleInfo.center.lng - lngRange
+            };
 
-          locationContext = `
+            locationContext = `
 中心地点の住所: ${result}
 中心座標: 緯度${circleInfo.center.lat}、経度${circleInfo.center.lng}
 範囲の半径: ${circleInfo.radius}メートル
@@ -129,13 +130,13 @@ const App = () => {
 - 南端: 緯度${bounds.south}
 - 東端: 経度${bounds.east}
 - 西端: 経度${bounds.west}`;
-        } catch (error) {
-          console.error('Geocoding error:', error);
-          locationContext = `
+          } catch (error) {
+            console.error('Geocoding error:', error);
+            locationContext = `
 中心座標: 緯度${circleInfo.center.lat}、経度${circleInfo.center.lng}
 範囲の半径: ${circleInfo.radius}メートル`;
+          }
         }
-      }
       
       const prompt = `
 次の制約条件で行動プランを作成し、以下のJSON形式で返答してください：
@@ -161,8 +162,8 @@ const App = () => {
 - addressは必ず正確な住所を記載してください（例：東京都渋谷区神宮前1-1-1）
 - detailsは必ずlocationsの順番に対応したナンバリングを含めてください
 - Markdown記法は使用せず、プレーンテキストで記述してください
-- 全てのlocationsは指定された中心地点から半径${circleInfo.radius*0.7}メートル以内の場所を選んでください
-- 出力するlocationsは全て指定された中心地点から半径${circleInfo.radius*0.7}メートル以内にあるか確認し、条件を満たしていなかった場合は再生成してください
+- 全てのlocationsは指定された行動範囲の場所を選んでください
+- 出力するlocationsは全て指定された行動範囲にあるか確認し、条件を満たしていなかった場合は再生成してください
 `;
 
       console.log('Sending prompt to Gemini:', prompt);
@@ -270,6 +271,8 @@ const App = () => {
               currentPlan={currentPlan} 
               onCircleChange={handleCircleChange}
               circleInfo={circleInfo}
+              rangeType={rangeType}
+              setRangeType={setRangeType}
             />
             
             {loading && (
@@ -382,6 +385,7 @@ const App = () => {
               radius={circleInfo.radius}
               center={circleInfo.center}
               googleApi={googleApi}
+              rangeType={rangeType}
             />
           </Paper>
         </Grid>

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googleApi, rangeType = 'circle' }) => {
+const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googleApi, rangeType}) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const directionsServiceRef = useRef(null);
@@ -11,9 +11,7 @@ const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googl
 
   // 円を表示すべきかどうかを判定
   const shouldShowCircle = () => {
-    // テキストによる指定の場合のみ非表示
-    if (rangeType === 'text') return false;
-    return true;
+    return rangeType === "circle"; // `circle` の場合にのみ円を描画
   };
 
   // 地図の初期化
@@ -59,7 +57,7 @@ const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googl
     }
 
     initializeMap();
-  }, [googleApi, rangeType, plan]);
+  }, [googleApi, rangeType, radius]);
 
   // 円の更新
   const updateCircle = (center, radius) => {
@@ -96,9 +94,11 @@ const MapDisplay = ({ plan, onCircleChange, radius, center: initialCenter, googl
   useEffect(() => {
     if (googleApi && mapInstanceRef.current && initialCenter) {
       if (shouldShowCircle()) {
+        console.log("円を描画する条件が満たされています");
         updateCircle(initialCenter, radius || 1000);
       } else if (circleRef.current) {
-        circleRef.current.setMap(null);
+        console.log("円を非表示にします");
+        circleRef.current.setMap(null);// 円を削除
       }
     }
   }, [initialCenter, radius, googleApi, rangeType, plan]);

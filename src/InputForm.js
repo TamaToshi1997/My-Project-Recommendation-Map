@@ -16,16 +16,18 @@ import SendIcon from '@mui/icons-material/Send';
 import SaveIcon from '@mui/icons-material/Save';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
-const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) => {
+const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo, rangeType, setRangeType }) => {
   const [purpose, setPurpose] = useState('');
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
     severity: 'success'
   });
+  const handleRangeTypeChange = (event) => {
+    setRangeType(event.target.value); // 親コンポーネントの状態を更新
+  };
 
   const [circleRadius, setCircleRadius] = useState(circleInfo?.radius || 1000);
-  const [rangeType, setRangeType] = useState('circle');
   const [textRange, setTextRange] = useState('');
 
   // circleInfoが変更されたときにradiusを更新
@@ -144,7 +146,7 @@ const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) =>
         </Typography>
         <RadioGroup
           value={rangeType}
-          onChange={(e) => setRangeType(e.target.value)}
+          onChange={handleRangeTypeChange}
         >
           <FormControlLabel 
             value="circle" 
@@ -167,7 +169,7 @@ const InputForm = ({ onPlanSubmit, currentPlan, onCircleChange, circleInfo }) =>
           <Slider
             value={circleRadius}
             onChange={handleRadiusChange}
-            min={100}
+            min={500}
             max={5000}
             step={100}
             aria-labelledby="range-slider"
